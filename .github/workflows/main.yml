@@ -1,0 +1,109 @@
+name: Run Setup Script
+
+on:
+  push:
+    branches:
+      - main  # Trigger on pushes to the main branch
+
+jobs:
+  bitcoin-setup:
+    runs-on: ubuntu-latest  # Use the latest Ubuntu environment
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4  # Check out the repository code
+
+      - name: Cache Bitcoin Core
+        id: cache-bitcoin
+        uses: actions/cache@v3
+        with:
+          path: |
+            bitcoin-28.0
+            bitcoin-28.0-x86_64-linux-gnu.tar.gz
+          key: bitcoin-core-28.0
+          
+      - name: Setup Bitcoin Core
+        run: |
+          if [ "${{ steps.cache-bitcoin.outputs.cache-hit }}" != 'true' ]; then
+            wget https://bitcoincore.org/bin/bitcoin-core-28.0/bitcoin-28.0-x86_64-linux-gnu.tar.gz
+            tar -xzvf bitcoin-28.0-x86_64-linux-gnu.tar.gz
+          fi
+          sudo bash .github/setup.sh
+
+      - name: Start bitcoind in regtest mode
+        run: |
+          bitcoind -regtest -daemon
+          echo "Waiting for bitcoind to be ready..."
+
+          # Wait for bitcoind to start (max 30s)
+          for i in {1..30}; do
+            if bitcoin-cli -regtest getblockchaininfo > /dev/null 2>&1; then
+              echo "✅ bitcoind is ready!"
+              break
+            fi
+            echo "Still waiting for bitcoind..."
+            sleep 1
+          done
+
+      - name: Verify Wallet Creation
+        run: |
+            chmod +x submission/01.sh
+            WALLET=$(submission/01.sh)
+            if [[ "$WALLET" == *"btrustwallet"* ]]; then
+              echo "✅ Success: Wallet creation passed!"
+            else
+              echo "❌ Error: Wallet creation failed!"
+              exit 1
+            fi
+
+      - name: Verify Native Segwit Public Key
+        run: |
+          chmod +x submission/02.sh
+          PUB_KEY=$(submission/02.sh)
+          echo "PUB_KEY=$PUB_KEY"
+          if [[ "$PUB_KEY" =~ ^(02|03)[a-fA-F0-9]{64}$ ]]; then
+            echo "✅ Success: Native Segwit Public Key generation passed!"
+          else
+            echo "❌ Error: Native Segwit Public Key generation failed!"
+            exit 1
+          fi
+
+      - name: Verify Multisig P2SH Address Generation
+        run: |
+          chmod +x submission/03.sh
+          P2SH_ADDRESS=$(submission/03.sh)
+          echo "P2SH_ADDRESS=$P2SH_ADDRESS"
+          EXPECTED_OUTPUT=2N8Xijk8DpVva2PZkH3N25QQg3ExbSmZfEt
+          if [[ "$P2SH_ADDRESS" == "$EXPECTED_OUTPUT" ]]; then
+            echo "✅ Success: Multisig P2SH address generation passed!"
+          else
+            echo "❌ Error: Multisig P2SH address generation failed!"
+            exit 1
+          fi
+
+      - name: Verify 2-of-3 P2SH Address Generation
+        run: |
+          chmod +x submission/04.sh
+          P2SH_ADDRESS=$(submission/04.sh)
+          echo "P2SH_ADDRESS=$P2SH_ADDRESS"
+          EXPECTED_OUTPUT=2MyXiyCRVXJ8YgnifFMVwVqFf1kBSHpt8xC
+          if [[ "$P2SH_ADDRESS" == "$EXPECTED_OUTPUT" ]]; then
+            echo "✅ Success: 2-of-3 P2SH address generation passed!"
+          else
+            echo "❌ Error: 2-of-3 P2SH address generation failed!"
+            exit 1
+          fi
+            
+      - name: Verify Partially Signed Bitcoin Transaction Generation
+        run: |
+          chmod +x submission/05.sh
+          PSBT=$(submission/05.sh)
+          echo "PSBT=$PSBT"
+          EXPECTED_OUTPUT=cHNidP8BAHwCAAAAAhYO5d0UYxa7NADt4NStUSq5we3khqtaEZou6dQ3n8EjAAAAAAD9////Fg7l3RRjFrs0AO3g1K1RKrnB7eSGq1oRmi7p1DefwSMBAAAAAP3///8BAC0xAQAAAAAXqRQh7ZB2LhbqrqGIquGRQuWyW/ddI4cAAAAAAAAAAA==
+          if [[ "$PSBT" == "$EXPECTED_OUTPUT" ]]; then
+            echo "✅ Success: Partially Signed Bitcoin Transaction generation passed!"
+          else
+            echo "❌ Error: Partially Signed Bitcoin Transaction generation failed!"
+            exit 1
+          fi
+          
