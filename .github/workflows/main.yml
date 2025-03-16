@@ -3,15 +3,15 @@ name: Run Setup Script
 on:
   push:
     branches:
-      - main  # Trigger on pushes to the main branch
+      - main # Trigger on pushes to the main branch
 
 jobs:
   bitcoin-setup:
-    runs-on: ubuntu-latest  # Use the latest Ubuntu environment
+    runs-on: ubuntu-latest # Use the latest Ubuntu environment
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4  # Check out the repository code
+        uses: actions/checkout@v4 # Check out the repository code
 
       - name: Cache Bitcoin Core
         id: cache-bitcoin
@@ -21,7 +21,7 @@ jobs:
             bitcoin-28.0
             bitcoin-28.0-x86_64-linux-gnu.tar.gz
           key: bitcoin-core-28.0
-          
+
       - name: Setup Bitcoin Core
         run: |
           if [ "${{ steps.cache-bitcoin.outputs.cache-hit }}" != 'true' ]; then
@@ -47,14 +47,14 @@ jobs:
 
       - name: Verify Wallet Creation
         run: |
-            chmod +x submission/01.sh
-            WALLET=$(submission/01.sh)
-            if [[ "$WALLET" == *"btrustwallet"* ]]; then
-              echo "✅ Success: Wallet creation passed!"
-            else
-              echo "❌ Error: Wallet creation failed!"
-              exit 1
-            fi
+          chmod +x submission/01.sh
+          WALLET=$(submission/01.sh)
+          if [[ "$WALLET" == *"btrustwallet"* ]]; then
+            echo "✅ Success: Wallet creation passed!"
+          else
+            echo "❌ Error: Wallet creation failed!"
+            exit 1
+          fi
 
       - name: Verify Native Segwit Public Key
         run: |
@@ -93,7 +93,7 @@ jobs:
             echo "❌ Error: 2-of-3 P2SH address generation failed!"
             exit 1
           fi
-            
+
       - name: Verify Partially Signed Bitcoin Transaction Generation
         run: |
           chmod +x submission/05.sh
@@ -106,4 +106,97 @@ jobs:
             echo "❌ Error: Partially Signed Bitcoin Transaction generation failed!"
             exit 1
           fi
-          
+
+      - name: Validate PSBT Multisig Workflow Exercise
+        run: |
+          # Check that 06.sh exists and is executable
+          if [ ! -f submission/06.sh ]; then
+            echo "❌ Error: 06.sh does not exist!"
+            exit 1
+          fi
+          chmod +x submission/06.sh
+
+          echo "Validating 06.sh template structure..."
+
+          # Check that all required functions are defined
+          REQUIRED_FUNCTIONS=(
+            "create_multisig_wallet"
+            "setup_multisig_keys"
+            "create_multisig_address"
+            "import_multisig_to_wallet"
+            "fund_multisig_address"
+            "verify_multisig_funding"
+            "create_multisig_psbt"
+            "sign_psbt"
+            "analyze_psbt"
+            "finalize_psbt"
+            "broadcast_transaction"
+            "run_multisig_workflow"
+          )
+
+          MISSING_FUNCTIONS=()
+          for func in "${REQUIRED_FUNCTIONS[@]}"; do
+            if ! grep -q "function $func" submission/06.sh; then
+              MISSING_FUNCTIONS+=("$func")
+            fi
+          done
+
+          if [ ${#MISSING_FUNCTIONS[@]} -gt 0 ]; then
+            echo "❌ Error: The following required functions are missing from the template:"
+            for func in "${MISSING_FUNCTIONS[@]}"; do
+              echo "  - $func"
+            done
+            exit 1
+          else
+            echo "✅ All required functions are defined in the template!"
+          fi
+
+          # Check that the main workflow function is called at the end
+          if ! grep -q "run_multisig_workflow" submission/06.sh | tail -10; then
+            echo "❌ Error: The run_multisig_workflow function is not called at the end of the script!"
+            exit 1
+          fi
+
+          # Verify that key variables are properly defined
+          EXPECTED_VARS=(
+            "PUBKEY1="
+            "PUBKEY2="
+            "PUBKEY3="
+            "DESCRIPTOR="
+            "MULTISIG_ADDRESS="
+            "REDEEM_SCRIPT="
+            "UTXO="
+            "UTXO_TXID="
+            "UTXO_VOUT="
+            "UTXO_AMOUNT="
+            "PSBT="
+            "FINALIZED_PSBT="
+            "HEX_TX="
+          )
+
+          MISSING_VARS=()
+          for var in "${EXPECTED_VARS[@]}"; do
+            if ! grep -q "$var" submission/06.sh; then
+              MISSING_VARS+=("$var")
+            fi
+          done
+
+          if [ ${#MISSING_VARS[@]} -gt 0 ]; then
+            echo "❌ Error: The following expected variable declarations might be missing from the template:"
+            for var in "${MISSING_VARS[@]}"; do
+              echo "  - $var"
+            done
+            exit 1
+          else
+            echo "✅ All expected variable declarations are present in the template!"
+          fi
+
+          # check that the HEX_TX varibale can be decoded
+          if ! bitcoin-cli -regtest decoderawtransaction "$HEX_TX" > /dev/null 2>&1; then
+            echo "❌ Error: The HEX_TX variable cannot be decoded!"
+            exit 1
+          else
+            echo "✅ The HEX_TX variable can be decoded!"
+          fi
+
+          echo "✅ final validation passed!"
