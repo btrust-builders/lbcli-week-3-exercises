@@ -80,7 +80,7 @@ function create_multisig_address() {
   # 2. Create a multisig address using the keys
   # 3. Store the address, redeemScript, and descriptor
 
-  # HINT: for descrriptor wallets, you need to use the keys to create a descriptor first
+  # HINT: for descriptor wallets, you need to use the keys to create a descriptor first
   # then derive the address from the descriptor
   # Remember to get the descriptor checksum using getdescriptorinfo
 
@@ -134,7 +134,7 @@ function fund_multisig_address() {
   # 3. Return the funding txid
 
   FUNDING_TXID=
-  echo "Funding transaction ID: $FUNDING_TXID"
+  echo "Successfully funded multisig address. transaction ID: $FUNDING_TXID"
 
   # Export the funding txid for other functions to use
   export FUNDING_TXID

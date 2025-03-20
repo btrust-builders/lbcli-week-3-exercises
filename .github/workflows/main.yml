@@ -109,13 +109,7 @@ jobs:
 
       - name: Validate PSBT Multisig Workflow Exercise
         run: |
-          # Check that 06.sh exists and is executable
-          if [ ! -f submission/06.sh ]; then
-            echo "❌ Error: 06.sh does not exist!"
-            exit 1
-          fi
           chmod +x submission/06.sh
-
           echo "Validating 06.sh template structure..."
 
           # Check that all required functions are defined
