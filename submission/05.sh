@@ -6,9 +6,6 @@
 
 #!/bin/bash
 
-#!/bin/bash
-
-# Wallet Name
 WALLET_NAME="btrustwallet"
 
 # Ensure Bitcoin Core is running
@@ -29,7 +26,7 @@ bitcoin-cli -regtest -rpcwallet="$WALLET_NAME" settxfee 0.00001 >/dev/null 2>&1
 # Check balance
 BALANCE=$(bitcoin-cli -regtest -rpcwallet="$WALLET_NAME" getbalance)
 if (( $(echo "$BALANCE < 1" | bc -l) )); then
-    echo "⚠️  Insufficient funds! Mining blocks and funding wallet..."
+    echo "⚠️ Insufficient funds! Mining blocks and funding wallet..."
     MINER_ADDR=$(bitcoin-cli -regtest getnewaddress)
     bitcoin-cli -regtest generatetoaddress 101 "$MINER_ADDR"
     RECEIVER=$(bitcoin-cli -regtest -rpcwallet="$WALLET_NAME" getnewaddress)
@@ -59,6 +56,7 @@ echo "Raw Transaction: $rawtx"
 # Create PSBT with fallback fee
 psbt=$(bitcoin-cli -regtest -rpcwallet="$WALLET_NAME" walletcreatefundedpsbt \
     '[]' '[{"'"$destination_address"'": 0.2}]' \
-    0 '{"subtractFeeFromOutputs":[0], "replaceable":true, "fee_rate": 10}')
+    0 '{"subtractFeeFromOutputs":[0], "replaceable":true, "fee_rate": 10, "includeWatching": true}')
 
 echo "Partially Signed Transaction: $psbt"
+
