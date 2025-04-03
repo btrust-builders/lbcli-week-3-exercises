@@ -6,13 +6,22 @@
 
 #!/bin/bash
 
+# Enable fallbackfee in bitcoin.conf
+echo "fallbackfee=0.0002" >> ~/.bitcoin/bitcoin.conf
+
+# Restart Bitcoin Core to apply changes
+bitcoin-cli -regtest stop
+bitcoind -regtest -daemon
+sleep 5  # Give it time to restart
+
+# Transaction details
 txid="77efbd235f00d1d92c77e3e4b2a5f6d9954547d0865f8d695eecbbde8e92b0c8"
 vout=37
 
+# Create raw transaction
 rawtx=$(bitcoin-cli -regtest createrawtransaction '[{"txid": "'"$txid"'", "vout": '"$vout"'}]' '[{"2MvLcssW49n9atmksjwg2ZCMsEMsoj3pzUP": 0.20}, {"bcrt1qlpy0u5n8fydg5hfjgg77fv9zf5gxt3srrykua5": 0.03679108}]')
-
 echo "Raw Transaction: $rawtx"
 
-psbt=$(bitcoin-cli -regtest walletcreatefundedpsbt '[]' '[{"2MvLcssW49n9atmksjwg2ZCMsEMsoj3pzUP": 0.20}, {"bcrt1qlpy0u5n8fydg5hfjgg77fv9zf5gxt3srrykua5": 0.03679108}]' 0)
-
+# Create partially signed Bitcoin transaction (PSBT) with fee rate
+psbt=$(bitcoin-cli -regtest walletcreatefundedpsbt '[]' '[{"2MvLcssW49n9atmksjwg2ZCMsEMsoj3pzUP": 0.20}, {"bcrt1qlpy0u5n8fydg5hfjgg77fv9zf5gxt3srrykua5": 0.03679108}]' 0 '{"fee_rate": 10}')
 echo "Partially Signed Transaction: $psbt"
