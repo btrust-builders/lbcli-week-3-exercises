@@ -6,39 +6,48 @@
 
 #!/bin/bash
 
-# Ensure Bitcoin Core is running
-bitcoin-cli -regtest stop
-bitcoind -regtest -daemon
-sleep 5  # Give it time to start
+#!/bin/bash
 
-# Wallet name
+# Wallet Name
 WALLET_NAME="btrustwallet"
 
-# Check if wallet exists, otherwise create it
-if ! bitcoin-cli -regtest listwallets | grep -q "$WALLET_NAME"; then
-    bitcoin-cli -regtest createwallet "$WALLET_NAME"
+# Ensure Bitcoin Core is running
+if ! bitcoin-cli -regtest getblockchaininfo >/dev/null 2>&1; then
+    bitcoind -regtest -daemon
+    sleep 5  # Wait for Bitcoin Core to start
 fi
 
-# Load wallet if not already loaded
+# Check if wallet exists, otherwise load it
 if ! bitcoin-cli -regtest listwallets | grep -q "$WALLET_NAME"; then
-    bitcoin-cli -regtest loadwallet "$WALLET_NAME"
+    echo "⚠️ Loading wallet..."
+    bitcoin-cli -regtest loadwallet "$WALLET_NAME" || bitcoin-cli -regtest createwallet "$WALLET_NAME"
 fi
 
-# Check wallet balance
+# Set wallet flag to use fallback fee
+bitcoin-cli -regtest -rpcwallet="$WALLET_NAME" settxfee 0.00001 >/dev/null 2>&1
+
+# Check balance
 BALANCE=$(bitcoin-cli -regtest -rpcwallet="$WALLET_NAME" getbalance)
-if (( $(echo "$BALANCE < 0.5" | bc -l) )); then
+if (( $(echo "$BALANCE < 1" | bc -l) )); then
     echo "⚠️  Insufficient funds! Mining blocks and funding wallet..."
-    bitcoin-cli -regtest generatetoaddress 101 "$(bitcoin-cli -regtest getnewaddress)"
+    MINER_ADDR=$(bitcoin-cli -regtest getnewaddress)
+    bitcoin-cli -regtest generatetoaddress 101 "$MINER_ADDR"
     RECEIVER=$(bitcoin-cli -regtest -rpcwallet="$WALLET_NAME" getnewaddress)
     bitcoin-cli -regtest sendtoaddress "$RECEIVER" 1
-    bitcoin-cli -regtest generatetoaddress 1 "$(bitcoin-cli -regtest getnewaddress)"
+    bitcoin-cli -regtest generatetoaddress 1 "$MINER_ADDR"
 fi
 
-# Transaction details
-txid="c8b0928edebbec5e698d5f86d0474595d9f6a5b2e4e3772cd9d1005f23bdef77"
-vout=37
+# Fetch an available UTXO
+UTXO=$(bitcoin-cli -regtest -rpcwallet="$WALLET_NAME" listunspent | jq -r '.[0]')
+if [ "$UTXO" == "null" ]; then
+    echo "❌ Error: No available UTXOs!"
+    exit 1
+fi
+txid=$(echo "$UTXO" | jq -r '.txid')
+vout=$(echo "$UTXO" | jq -r '.vout')
+
+# Destination address
 destination_address="2MvLcssW49n9atmksjwg2ZCMsEMsoj3pzUP"
-amount_satoshis=20000000  # 20 million satoshis = 0.2 BTC
 
 # Create raw transaction
 rawtx=$(bitcoin-cli -regtest -rpcwallet="$WALLET_NAME" createrawtransaction \
@@ -47,10 +56,9 @@ rawtx=$(bitcoin-cli -regtest -rpcwallet="$WALLET_NAME" createrawtransaction \
 
 echo "Raw Transaction: $rawtx"
 
-# Create PSBT
+# Create PSBT with fallback fee
 psbt=$(bitcoin-cli -regtest -rpcwallet="$WALLET_NAME" walletcreatefundedpsbt \
-    '[{"txid": "'"$txid"'", "vout": '"$vout"'}]' \
-    '[{"'"$destination_address"'": 0.2}]' \
-    0 '{"fee_rate": 10}')
+    '[]' '[{"'"$destination_address"'": 0.2}]' \
+    0 '{"subtractFeeFromOutputs":[0], "replaceable":true, "fee_rate": 10}')
 
 echo "Partially Signed Transaction: $psbt"
