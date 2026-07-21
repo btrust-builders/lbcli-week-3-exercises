@@ -32,7 +32,7 @@ jobs:
 
       - name: Start bitcoind in regtest mode
         run: |
-          bitcoind -regtest -daemon
+          bitcoind -regtest -fallbackfee=0.0002 -daemon
           echo "Waiting for bitcoind to be ready..."
 
           # Wait for bitcoind to start (max 30s)
@@ -144,5 +144,18 @@ jobs:
             echo "❌ Error: Address Verification for Partially Signed Bitcoin Transaction failed!"
             exit 1
           fi
+      - name: final.sh - Verify Treasury Multisig Challenge
+        run: |
+          chmod +x submission/final.sh
 
-      
+          echo "Running Week 3 capstone exercise..."
+          if submission/final.sh > treasury_output.log 2>&1; then
+            echo "✅ Capstone exercise completed successfully!"
+            echo "--- Treasury Challenge Summary ---"
+            tail -n 15 treasury_output.log
+            echo "---------------------------------"
+          else
+            echo "❌ Capstone exercise failed!"
+            cat treasury_output.log
+            exit 1
+          fi
